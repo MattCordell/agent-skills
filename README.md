@@ -6,7 +6,9 @@ A curated collection of skills for Claude Code (CLI and VS Code extension). This
 
 | Skill | Purpose |
 |-------|---------|
+| **cleanup** | Tidy up a local git repository after finishing a task, ready for a new one. Deletes local branches already merged into trunk, prunes stale remote-tracking refs, and switches back to trunk with the latest pull. |
 | **commit** | Review changes with `git status` and `git diff`, stage files, write conventional commit messages with explanatory body, and push to origin. Reports the commit SHA after pushing. |
+| **conference-submission-review** | Conduct structured peer reviews of academic conference or journal submissions in health informatics, biomedical informatics, and related fields. Also supports self-checking your own paper before submitting. |
 | **review-pr** | Review GitHub pull requests and post feedback as a PR comment. Analyzes diffs for correctness, security, error handling, tests, readability, and performance. Invoked with `/review-pr <PR URL>`. |
 | **to-tickets** | Break a plan, spec, or conversation into tracer-bullet tickets with blocking relationships. Publishes to your configured issue tracker with dependencies declared. |
 | **writing-great-skills** | Reference for writing and editing skills well — principles for predictability, information hierarchy, failure modes, and structural patterns that make skills reliable and maintainable. |
@@ -76,6 +78,19 @@ Steps or reference material for the skill.
 
 For more guidance on skill design, see the `writing-great-skills` skill in this repository.
 
+### Linking the New Skill
+
+Adding a skill directory to the repo is **not** enough on its own — Claude Code only discovers skills that have a corresponding link in `~/.claude/skills/`, and that link is not created automatically when you add a new folder here. You must create it yourself, once, for each new skill:
+
+```powershell
+cd ~/.claude/skills
+New-Item -ItemType Junction -Path <skill-name> -Target C:\Repos\agent-skills\<skill-name>
+```
+
+(From Git Bash, `ln -s /c/Repos/agent-skills/<skill-name> ~/.claude/skills/<skill-name>` works too.)
+
+Without this step the skill will exist in the repo and in git history, but Claude Code won't list it or respond to it. This only needs to be done once per skill per machine — after that, edits and pulls flow through automatically (see "How It Works").
+
 ## Updating Skills
 
 1. **Edit the skill** locally in its directory:
@@ -106,7 +121,11 @@ For more guidance on skill design, see the `writing-great-skills` skill in this 
 agent-skills/
 ├── README.md                    (this file)
 ├── LICENSE
+├── cleanup/                     (user-invoked skill)
+│   └── SKILL.md
 ├── commit/                      (user-invoked skill)
+│   └── SKILL.md
+├── conference-submission-review/ (auto-triggered skill)
 │   └── SKILL.md
 ├── review-pr/                   (direct-argument skill)
 │   └── SKILL.md
@@ -121,7 +140,7 @@ Currently, skills are organized flat at the repository root. As the collection g
 
 ## Tips
 
-- **Skill discovery**: If you add a new skill directory to the repo and pull, Claude Code will discover it on the next invocation
+- **Skill discovery**: Pulling a new skill directory is not enough — you must also create its junction in `~/.claude/skills/` (see "Linking the New Skill" above) before Claude Code will discover it
 - **Broken junctions**: If a junction becomes stale, you can recreate it: `Remove-Item <junction>; New-Item -ItemType Junction -Path <target> -Target <source>`
 - **Version control**: Keep your skills versioned in git so you can track changes and revert if needed
 - **Documentation**: Add a `GLOSSARY.md` or other supporting files if your skill is complex — keep the main `SKILL.md` lean by disclosing reference behind pointers
