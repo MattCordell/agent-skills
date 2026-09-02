@@ -1,17 +1,20 @@
 ---
 name: pick-up-issue
 description: >
-  End-to-end workflow for implementing a GitHub issue -- fetch context, clarify,
-  plan, branch, open a draft PR, implement in phases, verify, and mark ready for
-  human review. Trigger when the user runs /pick-up with a GitHub issue URL or
-  number (e.g. /pick-up https://github.com/owner/repo/issues/42 or /pick-up #42),
-  or says "pick up issue #N", "work on #N", "implement #N", "ship #N", or
-  "close out issue". Language-agnostic. The skill never merges the PR.
+  End-to-end execution of a GitHub issue that already has a detailed plan
+  posted as an issue comment (see /plan-issue) -- confirm the plan, branch,
+  open a draft PR, implement in phases, verify, and mark ready for human
+  review. If the issue has no plan comment, stops and asks the user how to
+  proceed rather than drafting one itself. Trigger when the user runs
+  /pick-up with a GitHub issue URL or number (e.g. /pick-up
+  https://github.com/owner/repo/issues/42 or /pick-up #42), or says "pick up
+  issue #N", "work on #N", "implement #N", "ship #N", or "close out issue".
+  Language-agnostic. The skill never merges the PR.
 ---
 
 # Implement GitHub Issue
 
-One branch. One PR. From issue to "ready for review."
+One branch. One PR. From plan to "ready for review."
 
 ---
 
@@ -19,7 +22,8 @@ One branch. One PR. From issue to "ready for review."
 
 - **Never merge the PR.** Merging is the human's final gate. The terminal state is "PR open, all phases verified, marked ready for review."
 - **All work on a dedicated branch.** Never commit directly to main.
-- **PRs must close the issue.** Use `Fixes #N` for bug-labelled issues. Use `Closes #N` for everything else. Always present in the PR body. Read the issue labels; default to `Closes` if unclear.
+- **PRs must close the issue.** Use `Fixes #N` for bug-labelled issues. Use `Closes #N` for everything else. Always present in the PR body.
+- **Never invent a plan.** This skill executes an existing plan; it does not write one. If the issue has no plan comment, stop and ask -- see Step 1.
 
 ---
 
@@ -27,116 +31,37 @@ One branch. One PR. From issue to "ready for review."
 
 **The code shows WHAT. The PR explains WHY.** Code comments are for non-obvious constraints and subtle invariants only. Reasoning, tradeoffs, and alternatives are recorded as inline PR review comments on the relevant code, or in the project's ADR for decisions with lasting architectural significance.
 
-**Iteration beats theory.** Build to learn; don't theorise to plan. Most uncertainty resolves in 10 minutes of test-writing, not hours of upfront analysis.
+**Iteration beats theory.** Build to learn; don't theorise to plan. The plan sets direction, not certainty -- most remaining uncertainty resolves in 10 minutes of test-writing, not more upfront analysis.
 
 ---
 
-## Step 0 — Plan mode check
-
-Before anything else: if you are not currently operating in a planning or think-first mode, ask the user:
-
-> "Do you want to plan this out before I start coding?"
-
-Wait for their answer before proceeding.
-
----
-
-## Step 1 — Fetch issue context
+## Step 1 — Confirm a plan exists
 
 ```bash
 gh issue view <num> --json number,title,body,labels,assignees,milestone,comments,url
 ```
 
-Read the body AND every comment. The latest decisions are often in comments, not the description. Extract:
+Search the comments for one starting with the marker `<!-- plan-issue:v1 -->` (posted by `/plan-issue`). If none has the marker, fall back to a comment containing both a `## Phases` and an `## Acceptance criteria` heading.
 
-- Acceptance criteria (explicit or implicit)
-- Linked issues, PRs, or discussions
-- Constraints the reporter called out
-- Labels (bug vs feature determines the PR closing keyword)
+**If no plan comment is found:** stop. Report back to the user, e.g.:
 
----
+> "Issue #N has no detailed plan attached. Run /plan-issue #N first, or tell me how you'd like to proceed."
 
-## Step 2 — Research the codebase
+Do not draft a plan yourself, and do not proceed to branching or implementation until the user decides.
 
-Before forming a plan, ground yourself:
-
-- Grep for symbols, files, or terms the issue names
-- Read surrounding code, not just the named file
-- Check `git log` on relevant files for recent context
-- Read `CLAUDE.md` (root and any nested) -- these carry architectural patterns, conventions, and test runner commands
-- Check whether the project has an ADR (Architecture Decision Record) directory. Common locations: `docs/adr/`, `docs/decisions/`, `adr/`, or files named `NNNN-*.md`. Note the location; it determines how significant decisions are recorded during implementation.
-
-**Stop if** the issue is ambiguous, acceptance criteria are unclear, or research reveals the issue's premise is wrong. Post your questions on the issue and wait rather than guessing.
+**If a plan comment is found**, take the most recent one and continue.
 
 ---
 
-## Step 2b — Clarifying questions
+## Step 2 — Read the plan
 
-Ask the user clarifying questions in a single batch until you are **at least 90% confident** you understand:
+From the plan comment, extract: Goal, Acceptance criteria, Approach, Phases, Files likely to change, Suggested branch, Closing keyword, Out of scope, Open questions.
 
-- The problem being solved
-- Expected behaviour: inputs, outputs, edge cases
-- Acceptance criteria (explicit or implied)
-- Constraints: performance, backwards compatibility, style conventions
-
-Ask in one batch where possible. Do not fire questions one at a time. Do not proceed to planning until you have reached the 90% threshold.
+If any Open question in the plan is still unresolved (check later issue comments for a resolution) and it would block implementation, stop and ask the user -- do not guess or silently resolve it.
 
 ---
 
-## Step 3 — Draft a lightweight plan
-
-Write to a temporary file (e.g. `/tmp/issue-<num>-plan.md`). This file is not committed to the repo -- it exists only long enough to be posted as an issue comment.
-
-```
-# Issue #<num>: <title>
-
-**Link:** <issue url>
-**Branch:** <branch-name>
-
-## Goal
-<1-2 sentences: what done looks like>
-
-## Approach
-<3-6 bullets: strategy, not step-by-step>
-
-## Phases
-1. <name> — <one-line scope>
-2. <name> — <one-line scope>
-
-## Files likely to change
-- `path/to/file` — <what changes and why>
-
-## Out of scope
-- <things that look related but are not part of this issue>
-
-## Open questions
-- <anything still unresolved>
-```
-
-Keep it strategic, not prescriptive: aim for under ~200 lines. If you find yourself describing how to implement something rather than what to implement and why, you are writing a spec, not a plan -- pull back to strategy.
-
-If the work spans multiple subsystems, has deeply interdependent phases, or looks like genuine multi-day effort, raise it with the user regardless of plan length: "This looks like it could be split into child issues -- do you want to break it down first, or proceed as one workstream?"
-
----
-
-## Step 4 — Post plan as issue comment
-
-```bash
-gh issue comment <num> --body-file /tmp/issue-<num>-plan.md
-rm /tmp/issue-<num>-plan.md
-```
-
-This step is non-negotiable. The issue comment is the single home for the plan. It serves three purposes:
-
-1. Stakeholders can correct direction before a line of code is written
-2. The plan is discoverable from the issue itself, not buried in a branch
-3. It creates a public commitment that disciplines the work
-
-Wait for stakeholder feedback before proceeding if the issue has active participants. For solo work, proceed after posting.
-
----
-
-## Step 5 — Create branch
+## Step 3 — Create branch
 
 Check the project's branch naming convention first:
 
@@ -144,7 +69,7 @@ Check the project's branch naming convention first:
 git branch -a | head -20
 ```
 
-Then create, using issue number prefix and a short kebab-case description:
+Use the plan's suggested branch name if one was given; otherwise create one from the issue number and a short kebab-case description:
 
 ```bash
 git checkout -b <num>-short-description
@@ -153,7 +78,7 @@ git push -u origin <num>-short-description
 
 ---
 
-## Step 6 — Open draft PR up front
+## Step 4 — Open draft PR up front
 
 Open the PR before implementation, not after. It is the long-lasting context for the workstream: reviewers can subscribe, phases push commits to it, and cross-references have a stable target.
 
@@ -167,7 +92,7 @@ Closes #<num>
 🚧 **Draft — work in progress.**
 
 ## Plan
-See plan comment on #<num>: <link to the issue comment posted in Step 4>
+See plan comment on #<num>: <link to the plan comment found in Step 1>
 
 ## Status
 - [ ] Phase 1: <name>
@@ -179,19 +104,19 @@ EOF
 )"
 ```
 
-Use `Fixes #<num>` instead of `Closes #<num>` if the issue is labelled as a bug.
+Use the closing keyword from the plan (`Fixes` for bug-labelled issues, `Closes` otherwise).
 
 The PR title follows Conventional Commits (`feat`, `fix`, `chore`, `docs`, `refactor`, etc.). Read `CLAUDE.md` or recent commit history to determine the project's convention.
 
 ---
 
-## Step 7 — Implement (repeat per phase)
+## Step 5 — Implement (repeat per phase)
 
-### 7a. Implement
+### 5a. Implement
 
 Atomic commits per logical change. Rebase; do not squash. Keep history meaningful -- per-change commits are part of the project's record.
 
-### 7b. Record decisions
+### 5b. Record decisions
 
 When you face a decision worth more than two lines of explanation, route it based on significance:
 
@@ -213,27 +138,27 @@ Status: Accepted
 <tradeoffs, what becomes easier, what becomes harder>
 ```
 
-**Implementation-level** (local tradeoff, approach choice, why this algorithm over that one): note it for posting as an inline PR review comment in Step 9. Do not write it into the code.
+**Implementation-level** (local tradeoff, approach choice, why this algorithm over that one): note it for posting as an inline PR review comment in Step 7. Do not write it into the code.
 
-If you are writing a 5-line code comment explaining a choice, stop. Write a 1-line pointer and record the reasoning for Step 9.
+If you are writing a 5-line code comment explaining a choice, stop. Write a 1-line pointer and record the reasoning for Step 7.
 
-### 7c. Run relevant tests only
+### 5c. Run relevant tests only
 
 During development, run only the tests covering the code you are changing. Do not run the full test suite between phases -- it is reserved for the pre-PR gate. Use the test runner and commands documented in `CLAUDE.md` or `README.md`.
 
-### 7d. Verify the phase
+### 5d. Verify the phase
 
 Do not wait for human review to learn whether the work is correct. Build the verification: write the test, probe the endpoint, inspect the build output -- whatever the work requires. If you cannot tell whether a phase is correct, ask "what can I build to verify this?" before reaching for human review.
 
-### 7e. Update the PR description
+### 5e. Update the PR description
 
 Tick the phase checkbox. Add verification evidence under that phase. Push.
 
 ---
 
-## Step 8 — Acceptance gate
+## Step 6 — Acceptance gate
 
-Before leaving draft, walk every acceptance criterion from the issue body, the plan comment on the issue, and any stakeholder comments. For each criterion, provide one of:
+Before leaving draft, walk every acceptance criterion from the plan's Acceptance criteria section, the issue body, and any stakeholder comments. For each criterion, provide one of:
 
 - **Evidence it is met**: file or line reference, test output, screenshot, build artifact
 - **Written authorisation to defer it**: link to a comment from the reporter or a maintainer explicitly authorising deferral
@@ -251,9 +176,9 @@ Render the gate result as an evidence table in the PR description:
 
 ---
 
-## Step 9 — Post inline review comments for implementation decisions
+## Step 7 — Post inline review comments for implementation decisions
 
-Post each implementation-level decision noted during Step 7b as a file/line review comment on the PR, so reviewers see the reasoning alongside the code:
+Post each implementation-level decision noted during Step 5b as a file/line review comment on the PR, so reviewers see the reasoning alongside the code:
 
 ```bash
 PR_NUM=<n>
@@ -271,21 +196,21 @@ gh api \
   -f side=RIGHT
 ```
 
-Architecturally significant decisions should already be in an ADR from Step 7b -- reference the ADR file in the PR description's "Why these changes" section rather than duplicating it inline.
+Architecturally significant decisions should already be in an ADR from Step 5b -- reference the ADR file in the PR description's "Why these changes" section rather than duplicating it inline.
 
 ---
 
-## Step 10 — Self-review, full test suite, mark ready
+## Step 8 — Self-review, full test suite, mark ready
 
-### 10a. Self-review
+### 8a. Self-review
 
 Adversarially review your own diff before any external reviewer sees it. For each function or section you touched, ask: how else could this be wrong, bypassed, or miss a case? -- alternate inputs, boundary variants, the same class of bug one step over. Write a failing test for each realistic case and fix it in this pass. Draw the line on the pedantic ones and note why (YAGNI). The bar: an external reviewer should surface a new *class* of issue, not the next adjacent edge of one you just touched.
 
-### 10b. Full test suite
+### 8b. Full test suite
 
 Run the full test suite. All must pass before marking ready. Fix any failures; do not skip or suppress.
 
-### 10c. Check mergeability, finalise, and mark ready
+### 8c. Check mergeability, finalise, and mark ready
 
 ```bash
 # Confirm branch merges cleanly
@@ -357,7 +282,7 @@ Every proactive fix gets a test. If you cannot write a failing test for the adja
 
 1. Collect all findings from the round
 2. Resolve by the rule above (resolve the class, one test per fix)
-3. Run the self-review loop (Step 10a) over the batched diff
+3. Run the self-review loop (Step 8a) over the batched diff
 4. Push once, then wait
 
 Do not push comment-by-comment. After pushing, do not prompt the reviewer -- a push triggers re-review automatically. If the loop appears stuck (every thread addressed, no fresh verdict), read the reviewer's recent comments for a status notice and follow it exactly.
@@ -386,7 +311,7 @@ Always re-run the full test suite after resolving -- a clean merge is not necess
 
 ## What this skill commits to the repo
 
-Only code and any new or updated ADR files. No planning artefacts are committed. The plan lives on the issue; implementation decisions live as inline PR review comments or in the ADR.
+Only code and any new or updated ADR files. No planning artefacts are committed. The plan lives on the issue (posted by `/plan-issue`); implementation decisions live as inline PR review comments or in the ADR.
 
 ---
 
@@ -394,10 +319,11 @@ Only code and any new or updated ADR files. No planning artefacts are committed.
 
 | If you think this... | The reality is... |
 |---|---|
-| "Let me theorise rather than build" | Plans are starting points. Build to learn; the implementation reveals what the plan cannot. |
+| "There's no plan comment, I'll just draft a quick one myself" | Not this skill's job. Stop and ask the user -- point them at `/plan-issue` or let them decide how to proceed. |
+| "Let me theorise rather than build" | The plan is a starting point, not a spec. Build to learn; the implementation reveals what the plan cannot. |
 | "Phase N (core) is done -- the rest can be sub-issues" | If the plan's acceptance criteria are not all met, Phase N is not done. Qualifiers like "core" or "initial" are a sign you are rationalising a scope cut. |
 | "There are conflicts; the merger can sort them" | Conflicts are your responsibility. Sync the branch before marking ready. |
 | "Build passed, so the work must be correct" | Build success does not equal feature correctness. Verify. |
 | "I'll fix this small adjacent thing while I'm here" | File a follow-up. Exception: hardening the same class within a review comment's blast radius (each fix tested) is done in-pass because it is already under review. |
-| "I'll skip the issue comment -- the plan is obvious" | Post it. It is the contract with stakeholders. |
+| "This open question in the plan is minor, I'll just decide" | Unresolved open questions are blocking. Ask the user rather than guessing. |
 | "I'll merge the PR myself when verification passes" | Never. Human review and merge is the final gate. |

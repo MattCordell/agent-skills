@@ -9,6 +9,8 @@ A curated collection of skills for Claude Code (CLI and VS Code extension). This
 | **cleanup** | Tidy up a local git repository after finishing a task, ready for a new one. Deletes local branches already merged into trunk, prunes stale remote-tracking refs, and switches back to trunk with the latest pull. |
 | **commit** | Review changes with `git status` and `git diff`, stage files, write conventional commit messages with explanatory body, and push to origin. Reports the commit SHA after pushing. |
 | **conference-submission-review** | Conduct structured peer reviews of academic conference or journal submissions in health informatics, biomedical informatics, and related fields. Also supports self-checking your own paper before submitting. |
+| **plan-issue** | Research a GitHub issue and post a detailed implementation plan as an issue comment, under Claude Code's plan mode. Invoked with `/plan-issue <issue URL or #N>`. Writes no code. |
+| **pick-up-issue** | Execute a GitHub issue that already has a plan comment from `plan-issue`: branch, open a draft PR, implement in phases, verify, and mark ready for review. Stops and asks if no plan is found. Invoked with `/pick-up-issue <issue URL or #N>`. Never merges. |
 | **review-pr** | Review GitHub pull requests and post feedback as a PR comment. Analyzes diffs for correctness, security, error handling, tests, readability, and performance. Invoked with `/review-pr <PR URL>`. |
 | **to-tickets** | Break a plan, spec, or conversation into tracer-bullet tickets with blocking relationships. Publishes to your configured issue tracker with dependencies declared. |
 | **writing-great-skills** | Reference for writing and editing skills well — principles for predictability, information hierarchy, failure modes, and structural patterns that make skills reliable and maintainable. |
@@ -126,6 +128,10 @@ agent-skills/
 ├── commit/                      (user-invoked skill)
 │   └── SKILL.md
 ├── conference-submission-review/ (auto-triggered skill)
+│   └── SKILL.md
+├── plan-issue/                  (auto-triggered skill)
+│   └── SKILL.md
+├── pick-up-issue/                (auto-triggered skill)
 │   └── SKILL.md
 ├── review-pr/                   (direct-argument skill)
 │   └── SKILL.md
