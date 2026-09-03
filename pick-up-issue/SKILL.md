@@ -78,6 +78,29 @@ git push -u origin <num>-short-description
 
 ---
 
+## Step 3a — Update project status to "In Progress"
+
+Check whether the issue is tracked on a GitHub Project (v2):
+
+```bash
+gh issue view <num> --json projectItems --jq '.projectItems'
+```
+
+If it belongs to one or more projects, move each to "In Progress" before implementation starts:
+
+```bash
+PROJECT_ID=<id from projectItems above>
+ITEM_ID=<id from projectItems above>
+FIELD_ID=$(gh project field-list <project-number> --owner <owner> --format json --jq '.fields[] | select(.name=="Status") | .id')
+OPTION_ID=$(gh project field-list <project-number> --owner <owner> --format json --jq '.fields[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
+
+gh project item-edit --id "$ITEM_ID" --field-id "$FIELD_ID" --project-id "$PROJECT_ID" --single-select-option-id "$OPTION_ID"
+```
+
+If the issue is not on any project, skip this step.
+
+---
+
 ## Step 4 — Open draft PR up front
 
 Open the PR before implementation, not after. It is the long-lasting context for the workstream: reviewers can subscribe, phases push commits to it, and cross-references have a stable target.

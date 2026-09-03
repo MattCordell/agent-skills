@@ -20,7 +20,7 @@ Research once, decide once, hand off clean. The output is a plan someone else --
 
 ## Hard rules
 
-- **Plan mode only.** No branch, no commit, no PR, no code. The only write action this skill ever takes is posting the approved plan as one issue comment.
+- **Plan mode only.** No branch, no commit, no PR, no code. The only write actions this skill ever takes, all after approval: creating prerequisite issues, linking them as blockers, posting the approved plan as one issue comment, and updating the issue's project status.
 - **The plan is the interface.** Write it for a cold reader: zero access to this conversation, possibly a different agent entirely. If a step only makes sense because "we discussed this earlier," it is not in the plan yet.
 - **Nothing gets posted before approval.** The plan is drafted and refined inside plan mode; it reaches GitHub only after the user approves it through `ExitPlanMode`.
 
@@ -74,6 +74,8 @@ Ask in one batch where possible. Do not fire questions one at a time. Do not dra
 
 If the work spans multiple subsystems, has deeply interdependent phases, or looks like genuine multi-day effort, raise it now regardless of plan length: "This looks like it could be split into child issues -- do you want to break it down first, or plan it as one workstream?"
 
+This is different from a **prerequisite issue** (see Step 4): splitting is about slicing this issue's own scope into smaller pieces, while a prerequisite is separate work -- often outside this issue's scope entirely -- that must land first (a migration, an upstream dependency bump, infra config).
+
 ---
 
 ## Step 4 — Draft the plan
@@ -106,6 +108,9 @@ Write the plan content (you'll hand it to `ExitPlanMode` next, then post it verb
 ## Files likely to change
 - `path/to/file` — <what changes and why>
 
+## Prerequisite issues
+- <title> — <one-line reason this must land before #<num> can proceed>
+
 ## Out of scope
 - <things that look related but are not part of this issue>
 
@@ -133,26 +138,63 @@ The **closing keyword**: default to `Fixes` for bug-labelled issues, `Closes` fo
 
 Pick one word per axis and back each with a single sentence -- do not hedge with a range.
 
+**Prerequisite issues** are separate work items research surfaced that must complete before this issue can, but are not part of this issue's own scope -- a migration, an upstream library bump, infra config, another team's change. Do not fold them into Phases; list them here instead so they can be tracked and blocked on separately. Leave the section out of the rendered plan if none apply.
+
 ---
 
 ## Step 5 — Exit plan mode for approval
 
-Call `ExitPlanMode` with the full plan content from Step 4. This is the approval gate -- the user reviews and can request changes before anything touches GitHub. Do not post to the issue until this returns approved.
+Call `ExitPlanMode` with the full plan content from Step 4, including any Prerequisite issues. This is the approval gate -- the user reviews and can request changes before anything touches GitHub. Do not create issues, link dependencies, or post anything until this returns approved.
 
 ---
 
-## Step 6 — Post the plan as an issue comment
+## Step 6 — Create prerequisites, post the plan, and update status
+
+### 6a. Create prerequisite issues
+
+For each entry under Prerequisite issues in the approved plan, create it and mark it as blocking the current issue in one step:
+
+```bash
+gh issue create --title "<title>" --body "<reason, and a link back to #<num>>" --blocking <num>
+```
+
+Note each new issue's number -- reference them in the plan comment below.
+
+### 6b. Post the plan as an issue comment
 
 ```bash
 gh issue comment <num> --body-file /tmp/issue-<num>-plan.md
 rm /tmp/issue-<num>-plan.md
 ```
 
-This is the single home for the plan -- discoverable from the issue itself, not buried in this conversation. It is also the only write action this skill performs.
+If prerequisite issues were created in 6a, make sure the posted plan's Prerequisite issues section references their real issue numbers (e.g. `Blocked by #43`), not just titles.
+
+This is the single home for the plan -- discoverable from the issue itself, not buried in this conversation.
 
 If the issue has active participants, mention to the user that it may be worth waiting for their feedback before anyone runs `/pick-up-issue` on it.
 
-**Stop here.** No branch, no PR, no code. Tell the user the plan is posted and ready for `/pick-up-issue #<num>` (by them, or by a different agent) whenever they want execution to start.
+### 6c. Update project status to "Ready"
+
+Check whether the issue is tracked on a GitHub Project (v2):
+
+```bash
+gh issue view <num> --json projectItems --jq '.projectItems'
+```
+
+If it belongs to one or more projects, move each to "Ready" now that a plan is posted:
+
+```bash
+PROJECT_ID=<id from projectItems above>
+ITEM_ID=<id from projectItems above>
+FIELD_ID=$(gh project field-list <project-number> --owner <owner> --format json --jq '.fields[] | select(.name=="Status") | .id')
+OPTION_ID=$(gh project field-list <project-number> --owner <owner> --format json --jq '.fields[] | select(.name=="Status") | .options[] | select(.name=="Ready") | .id')
+
+gh project item-edit --id "$ITEM_ID" --field-id "$FIELD_ID" --project-id "$PROJECT_ID" --single-select-option-id "$OPTION_ID"
+```
+
+Do this even if prerequisite issues were just added as blockers -- "Ready" means the plan is ready to execute once any blockers clear, not that it is unblocked today. If the issue is not on any project, skip this step.
+
+**Stop here.** No branch, no PR, no code. Tell the user the plan is posted and ready for `/pick-up-issue #<num>` (by them, or by a different agent) whenever they want execution to start -- once any prerequisite issues are resolved, if there were any.
 
 ---
 
@@ -164,3 +206,4 @@ If the issue has active participants, mention to the user that it may be worth w
 | "I'll sketch the how, not just the what" | That's a spec, not a plan. Pull back to strategy -- phases and files, not line-by-line instructions. |
 | "This open question is minor, I'll just note it and move on" | If it would block whoever executes this cold, it's not minor. Flag it plainly under Open questions. |
 | "I'll fix this while I'm in the code researching" | This skill never writes code. Note it in the plan (Files likely to change, or Out of scope) instead. |
+| "This dependency is small, I'll just add it as a phase" | If it's separate work that must land first and isn't really part of this issue's scope, it's a prerequisite, not a phase. Carve it out so it can be tracked and blocked on its own. |
