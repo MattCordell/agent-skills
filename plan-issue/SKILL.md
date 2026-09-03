@@ -87,6 +87,8 @@ Write the plan content (you'll hand it to `ExitPlanMode` next, then post it verb
 **Link:** <issue url>
 **Suggested branch:** <num>-short-description
 **Closing keyword:** Fixes | Closes
+**Size:** Small | Medium | Large — <one-sentence why>
+**Complexity:** Low | Medium | High — <one-sentence why>
 
 ## Goal
 <1-2 sentences: what done looks like>
@@ -114,6 +116,22 @@ Write the plan content (you'll hand it to `ExitPlanMode` next, then post it verb
 The `<!-- plan-issue:v1 -->` marker is load-bearing: `/pick-up-issue` looks for it to confirm a plan exists. Always include it as the first line, verbatim.
 
 The **closing keyword**: default to `Fixes` for bug-labelled issues, `Closes` for everything else.
+
+**Size** and **complexity** are for triage -- they tell whoever assigns the issue what to expect, at a glance. Rate them independently; a large refactor of a well-worn pattern is high size, low complexity, and a one-line fix to a subtle race condition is the reverse.
+
+**Size** is volume of work. Judge it from the Phases and Files above:
+
+- **Small** -- one phase, contained to a single component
+- **Medium** -- multiple phases, or touches more than one component
+- **Large** -- the multi-subsystem or multi-day case flagged in Step 3
+
+**Complexity** is difficulty, independent of volume. Judge it from unknowns and risk:
+
+- **Low** -- an established pattern in the codebase, no open design decisions
+- **Medium** -- some judgment calls or unfamiliar territory, but no deep unknowns
+- **High** -- genuine design decisions, ambiguity that survived Step 3, or a costly blast radius if the approach is wrong
+
+Pick one word per axis and back each with a single sentence -- do not hedge with a range.
 
 ---
 
