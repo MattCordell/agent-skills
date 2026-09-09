@@ -21,6 +21,7 @@ Research once, decide once, hand off clean. The output is a plan someone else --
 ## Hard rules
 
 - **Plan mode only.** No branch, no commit, no PR, no code. The only write actions this skill ever takes, all after approval: creating prerequisite issues, linking them as blockers, posting the approved plan as one issue comment, and updating the issue's project status.
+- **At most 2 subagents at a time, and only for genuinely independent work.** Do research directly by default. Delegate to a subagent only when a piece of research is truly independent of the rest (e.g. two unrelated areas of the codebase) -- not merely because a step feels broad.
 - **The plan is the interface.** Write it for a cold reader: zero access to this conversation, possibly a different agent entirely. If a step only makes sense because "we discussed this earlier," it is not in the plan yet.
 - **Nothing gets posted before approval.** The plan is drafted and refined inside plan mode; it reaches GitHub only after the user approves it through `ExitPlanMode`.
 

@@ -21,6 +21,7 @@ One branch. One PR. From plan to "ready for review."
 ## Hard rules
 
 - **Never merge the PR.** Merging is the human's final gate. The terminal state is "PR open, all phases verified, marked ready for review."
+- **At most 2 subagents at a time, and only for genuinely independent work.** Do research and implementation directly by default. Delegate to a subagent only when a piece of work is truly independent of the rest (e.g. two unrelated areas of the codebase) -- not merely because a step feels broad.
 - **All work on a dedicated branch.** Never commit directly to main.
 - **PRs must close the issue.** Use `Fixes #N` for bug-labelled issues. Use `Closes #N` for everything else. Always present in the PR body.
 - **Never invent a plan.** This skill executes an existing plan; it does not write one. If the issue has no plan comment, stop and ask -- see Step 1.
