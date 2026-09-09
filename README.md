@@ -13,6 +13,7 @@ A curated collection of skills for Claude Code (CLI and VS Code extension). This
 | **pick-up-issue** | Execute a GitHub issue that already has a plan comment from `plan-issue`: branch, open a draft PR, implement in phases, verify, and mark ready for review. Stops and asks if no plan is found. Invoked with `/pick-up-issue <issue URL or #N>`. Never merges. |
 | **review-pr** | Review GitHub pull requests and post feedback as a PR comment. Analyzes diffs for correctness, security, error handling, tests, readability, and performance. Invoked with `/review-pr <PR URL>`. |
 | **to-tickets** | Break a plan, spec, or conversation into tracer-bullet tickets with blocking relationships. Publishes to your configured issue tracker with dependencies declared. |
+| **verify-fixes** | Re-verify that PR review findings were addressed at the current head, scan the diff for newly introduced issues, run local gates, and post a merge-readiness comment. Invoked with `/verify-fixes <PR URL or number>`. |
 | **writing-great-skills** | Reference for writing and editing skills well — principles for predictability, information hierarchy, failure modes, and structural patterns that make skills reliable and maintainable. |
 
 ## How It Works
@@ -136,6 +137,8 @@ agent-skills/
 ├── review-pr/                   (direct-argument skill)
 │   └── SKILL.md
 ├── to-tickets/                  (user-invoked skill)
+│   └── SKILL.md
+├── verify-fixes/                (direct-argument skill)
 │   └── SKILL.md
 └── writing-great-skills/        (reference skill)
     ├── SKILL.md
