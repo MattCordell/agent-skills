@@ -1,232 +1,239 @@
 ---
 name: backlog-grooming
-description: Triage the open GitHub issues backlog for any repo — work out which issues are actually ready to start, which are blocked and by what, which are safe to run in parallel, and produce a ranked "next N issues" list with dependency notes. Use when the user asks to groom the backlog, triage issues, plan what the team should work on next, or asks "what's next" / "what can we parallelise" about a repo's issue tracker. Also trigger when the user wants to understand the current state of a project's work queue, even if they don't use the word "groom."
+description: Groom a GitHub Issues backlog in any repo - learn the repo's issue conventions, scan backlog health (duplicates, missing links, wrong issue types or labels, board drift, thin issues, stale work), fix it in user-approved batches, and rank what is ready to work on next. Use when the user asks to groom or triage the backlog, tidy or clean up issues, find duplicate issues, link related issues, or asks "what's next" / "what can we parallelise" about a repo's issue tracker.
 ---
 
 # Backlog grooming
 
-Grooming a GitHub Issues backlog means combining all available signals — board status,
-epic/child structure, native graph relationships, issue bodies, and comments — because
-any one source alone is misleading: the board's `Status` is hand-maintained and can lag
-reality; a `Blocked by #N` badge doesn't update itself if the relationship was added
-informally via prose; the epic/child tree only shows decomposition dependencies, not
-cross-epic blocked-by relationships.
+Grooming has two parts, run in this order:
 
-## Inputs to clarify (ask only if genuinely ambiguous)
+1. **Health** - make the backlog's data true: links, issue types, labels, milestones,
+   board status, duplicates, and issues too thin to act on.
+2. **Planning** - rank the ready work. Planning reads the links and statuses that the
+   health part repairs, so health comes first.
 
-- **Repo** (`owner/name`) — infer from `git remote get-url origin` if you have shell
-  access and the user hasn't given it.
-- **How many issues to surface** — default to 10.
-- **Scope filter** — a milestone, a label, or "everything open"? Default to everything
-  open.
-- **Issues currently in flight** — ask the user if anyone is already mid-work on
-  something not yet reflected on the board. Fold this in as an exclusion.
+Grooming is **progressive**. Scan, report a menu of next steps, let the user pick, apply
+the approved changes, then offer the menu again. A neglected backlog takes several
+sessions to clean up. A regularly groomed one takes minutes. Each session only has to
+leave the backlog better than it found it.
 
-Do not assume anything about how the repo is organised until you've pulled the data.
-Project board field names, label conventions, and whether the repo even uses a Projects
-v2 board are all things to discover, not presuppose.
+Combine every signal, because any one alone misleads. Board `Status` is hand-maintained
+and lags reality. A prose `Blocked by #N` note doesn't update when `#N` closes. Sub-issue
+trees show decomposition, not cross-epic blockers. Labels and sub-issues may both claim
+to define an epic, and they can disagree.
 
-## Procedure
+## Files in this skill
 
-### 1. Discover repo structure
+- [conventions-template.md](conventions-template.md) - the shape of the repo's
+  `.github/backlog-conventions.md`, and how to discover each section. Read it in step 1.
+- [queries.md](queries.md) - read-only `gh` and GraphQL calls. Read it in step 2.
+- [mutations.md](mutations.md) - write calls. Read it before the first write in step 5.
+- [planning.md](planning.md) - the planning part. Read it when the user picks planning.
 
-Before pulling issues, confirm what tooling the repo uses:
+## Inputs (ask only if genuinely ambiguous)
 
-```bash
-# Confirm the remote and default branch
-git remote get-url origin
-git symbolic-ref refs/remotes/origin/HEAD
+- **Repo** (`owner/name`) - infer from `git remote get-url origin`.
+- **Scope** - a milestone, label, epic, or everything open. Default: everything open.
+- **Work in flight** - anything the user knows is under way but the board doesn't show.
+  Treat it as `In progress`.
+- **Planning depth** - how many issues to rank. Default: 10.
 
-# Check if a Projects v2 board exists and what fields it has
-gh api graphql -f query='
-query { repository(owner:"OWNER", name:"REPO") {
-  projectsV2(first:5) { nodes { title fields(first:20) { nodes {
-    ... on ProjectV2FieldCommon { name }
-    ... on ProjectV2SingleSelectField { name options { name } }
-  } } } }
-} }'
-```
+## Step 1. Load the conventions
 
-If no Projects v2 board exists, note this and fall back to labels and milestones only
-for priority/status signals.
+The repo's conventions live in `.github/backlog-conventions.md` in the target repo. The
+skill owns that file. Every later step reads its vocabulary from it, never from
+assumptions.
 
-### 2. Pull the raw data
+**If the file exists:**
 
-Use GraphQL to get open issues with native relationship fields (`blockedBy`, `blocking`,
-`parent`, `subIssues`) in one pass. These are first-class fields on the `Issue` type —
-not prose parsing.
+1. Read it. Then read `CLAUDE.md` (root and nested), `CONTRIBUTING.md`, and
+   `.github/ISSUE_TEMPLATE/*`.
+2. Check it for drift against those documents and against live data from
+   [queries.md](queries.md) "Discovery". Examples: a label the file names no longer
+   exists; `CLAUDE.md` now says epics use sub-issues but the file says labels; a new
+   issue type or board status has appeared.
+3. Treat each piece of drift as a proposed edit to the conventions file. Show the
+   evidence and the edit. A human-written statement in `CLAUDE.md` or `CONTRIBUTING.md`
+   that is newer than the conventions file (compare `git log -1 --format=%cs -- <file>`)
+   usually wins. Still let the user confirm before changing the file.
 
-```bash
-# Lightweight first pass: open issues with relationships and body
-gh api graphql -f query='
-query($owner: String!, $repo: String!, $cursor: String) {
-  repository(owner: $owner, name: $repo) {
-    issues(first: 50, after: $cursor, states: [OPEN]) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        number title state body url
-        parent { number title state }
-        subIssues(first: 20) { nodes { number title state } }
-        blockedBy(first: 20) { nodes { number title state } }
-        blocking(first: 20) { nodes { number title state } }
-        labels(first: 10) { nodes { name } }
-        milestone { title }
-        projectItems(first: 5) { nodes { fieldValues(first: 20) { nodes {
-          ... on ProjectV2ItemFieldSingleSelectValue {
-            name field { ... on ProjectV2FieldCommon { name } }
-          }
-        } } } }
-      }
-    }
-  }
-}' -F owner=OWNER -F repo=REPO
-```
+**If the file is missing:** discover each section as
+[conventions-template.md](conventions-template.md) describes. Present a short summary.
+Ask the user to confirm or correct it, then write the file.
 
-Paginate with `endCursor` if `hasNextPage` is true.
+Either way, the file is a local change in the repo. Tell the user it is uncommitted.
 
-Also pull recently closed issues (to evaluate whether inferred prose dependencies are
-stale):
+**Done when:** every section of the template is filled in or marked "not used", and
+the user has confirmed any new file or drift edit this session.
 
-```bash
-gh issue list --state closed --limit 200 --json number,title,state
-```
+## Step 2. Pull the data
 
-**Windows/git-bash note:** if you shell out to `gh` from Bash and then post-process
-with `python3`, check which path each tool resolves `/tmp` to — MSYS and native Windows
-Python can disagree, making files invisible across the boundary. Either keep the whole
-pipeline in one shell (`jq` in Bash, or `ConvertFrom-Json` in PowerShell), or write to
-an absolute Windows path both tools can see.
+Follow [queries.md](queries.md). Collect:
 
-### 3. Read issue bodies and comments for inferred dependencies
+- every open issue in scope, with relationships, issue type, labels, milestone,
+  assignees, board fields, `updatedAt`, closing PRs, and plan-comment presence
+- the label set with usage counts
+- the state of every `#N` an issue mentions that is not in the open set
+- the state of any security alert an issue links to
 
-The GraphQL pass above captures native graph relationships. Now scan issue bodies and
-comments for additional dependency signals that may not yet be formalised as graph edges:
+**Done when:** every page is fetched (`hasNextPage` is false everywhere) and every
+referenced `#N` and alert has a known state.
 
-```bash
-# For any issue whose body contains ambiguous or partial dependency language
-gh issue view N --json comments --jq '.comments[] | {author: .author.login, body: .body}'
-```
+**Windows note:** if `gh` runs in Bash and `python3` post-processes the output, they can
+resolve `/tmp` to different folders. Keep the pipeline in one shell (`jq` in Bash, or
+`ConvertFrom-Json` in PowerShell), or write to the session scratchpad by absolute path.
 
-Read comments looking for:
-- Decisions that change scope or blockers (e.g. "we'll do X in #47 instead")
-- Evidence that a stated blocker has been resolved informally
-- Parallel work by contributors not reflected on the board
+## Step 3. Scan backlog health
 
-Prioritise this step for older issues and epics, where bodies may be stale.
+Run every check below against every in-scope issue. Skip anything listed under
+"Known exceptions" in the conventions file. Skip candidate duplicate pairs that already
+have a `relatesTo` link, because a user has already judged them related, not duplicate.
 
-### 4. Build the epic tree
+Record each finding with: the check, the issues, the evidence (a quote or field value),
+the proposed action, and whether it needs a person's decision.
 
-An issue with a non-empty `subIssues` list is an epic — it is not itself pickup-able
-work; it closes when every child closes. For each epic:
+| # | Check | What to look for | Usual action |
+|---|---|---|---|
+| H1 | **Duplicates** | Open issues that overlap. Open issues that restate a closed one. Cluster by title keywords, labels, and epic first, then compare bodies. | Report only. Resolve with the duplicate procedure in step 5. |
+| H2 | **Missing links** | See "Link types" below. | Add the native link. |
+| H3 | **Type and label mismatches** | Issue type disagrees with the conventions' type-label mapping (for example a `bug` label on a `Task`). No type. No labels. Labels outside the vocabulary. Contradictory labels (`bug` and `enhancement`). | Set the type or labels from whichever side the conventions name as the source of truth. |
+| H4 | **Label vocabulary** | Near-duplicate labels (`Bug`/`bug`). Labels with zero uses. Labels with no description. | Rename, merge, describe, or delete. Repo-wide, so always its own group. |
+| H5 | **Board drift** | Open issue not on the board. Closed issue not `Done`. `In progress` with no assignee and no linked branch or PR. `In progress` or `In review` whose closing PR has merged. `Ready` with no `<!-- plan-issue:v1 -->` comment, or a plan comment but still `Backlog` (if the conventions use `plan-issue`). | Add to board or move the card. |
+| H6 | **Epic hygiene** | Epic open with every child closed. Epic with no children. Epic label with no epic issue, or epic issue with no label, where the conventions require both. | Close the epic (confirm each) or add the missing half. |
+| H7 | **Missing milestone** | Open issue with no milestone, where the conventions use milestones. Apply the rules below the table. | Set the recommended milestone. |
+| H8 | **Not ready** | Vague title. No background or "why". Empty template sections. No acceptance criteria. Fails the conventions' definition of ready. Rank older issues higher: the longer one sits, the less anyone remembers. | Needs context from a person. See step 5. |
+| H9 | **Stale** | No activity past the conventions' threshold. Assignee with no activity on it. Lowest priority. | Ask whether it is still wanted. |
 
-- If every child is `CLOSED` but the epic is still `OPEN`, flag it — it's likely just
-  waiting for someone to close it. Call this out explicitly; don't silently recommend
-  working on it.
-- Only **open children** of an epic are candidate work items. Recurse — children can
-  themselves be epics.
+**Link types (H2):**
 
-### 5. Evaluate all dependencies
+- **Blocked by** - a prose dependency (the conventions' idioms, in the body or comments)
+  on an **open** issue with no native `blockedBy` edge. Mark each one with its source:
+  "stated in body", "stated in comments", or "inferred from domain context". Inferred
+  ones are hypotheses for the user to check.
+- **Parent and child** - an issue that belongs to an epic but has no parent, where the
+  conventions use sub-issues. Evidence: the epic label, "part of #N", a title prefix, or
+  the epic's own task list. Where the conventions use both labels and sub-issues, flag
+  issues where the two disagree.
+- **Relates to** - issues that reference each other, or clearly cover the same area,
+  with no `relatesTo` link and no stronger link.
+- **Security alert** - an issue body linking a Dependabot, code scanning, or secret
+  scanning alert. Flag an open issue whose alert is fixed or dismissed. If the conventions
+  require every open alert above a severity to have an issue, flag open alerts with none.
+- **Untracked prerequisite** - an issue names a prerequisite ("needs the job queue")
+  that no issue tracks. It is neither ready nor blocked by an issue. Propose creating the
+  prerequisite issue, or ask the user how to fill the gap.
 
-For every leaf (non-epic) open issue, collect dependencies from two sources:
+**Milestone rules (H7):**
 
-**Source A — Native graph relationships** (from `blockedBy` field):
-- If a blocking issue is `CLOSED`, the dependency is satisfied. Note it as a stale
-  graph edge that can be cleaned up.
-- If a blocking issue is `OPEN`, this issue is blocked. Chain transitively.
+- **Inherit from the parent epic**, unless the issue's own text argues for a different
+  phase.
+- **Match the milestone of the work it extends.** A fix to a shipped path belongs with
+  that path's milestone, not whichever milestone is open.
+- **Use a future milestone** only when the issue says it can't start until that
+  milestone's prerequisite lands.
+- **Send repo or process housekeeping** (CI, repo docs, admin) to a governance-type
+  milestone if one exists.
 
-**Source B — Prose and comments** (from bodies and comment threads):
-- Idioms: `**Blocked by #N**`, `**Depends on #N**`, `## Blocked by`, `## Dependencies`
-  sections, bare `#N` references in acceptance criteria naming a prerequisite.
-- Apply the same stale-check: if the referenced issue is closed, the prose is stale.
-- Also apply structural inference where the text won't state dependencies outright (a
-  frontend screen editing an entity generally needs that entity's backend model merged
-  first; an API client generation issue needs the OpenAPI doc it reads from).
+**Done when:** every check has run against every in-scope issue, and every finding has
+a proposed action.
 
-**Label every inferred dependency clearly** — distinguish:
-- "Native graph relationship (`blockedBy` field)"
-- "Stated in issue body"
-- "Stated in comments"
-- "Inferred from domain context"
+## Step 4. Report and offer next steps
 
-The last category is a hypothesis for the user to validate.
+Present, in this order:
 
-### 6. Rank
+1. **Conventions changes** - if step 1 changed or proposed changes to the file, say so
+   first.
+2. **Health summary** - one line per check with its finding count, including zeros. A
+   row of zeros is the sign the backlog is groomed.
+3. **Next steps** - a numbered menu of groups. For each, give what it does, the number
+   of items, and its kind: *bulk change*, *needs your decision*, *needs information from
+   people*, or *report only*.
+4. **Recommendation** - a session-sized set of steps. For a large backlog, split big
+   groups into batches of about 20 items.
 
-Order the ready set (no open blockers) by:
+Order the menu like this, because earlier groups change what later groups see:
 
-1. **Unblocking power** — how many other open issues does closing this one unblock?
-   Count references across `blocking` fields, prose, and comments.
-2. **Board priority** (P0 > P1 > P2 or equivalent) if the field exists and looks
-   trustworthy.
-3. **Milestone** — don't recommend lower-milestone work ahead of the active milestone's
-   backlog unless the user asked.
+1. Duplicates (H1) - merging moves links and labels.
+2. Links and epic hygiene (H2, H6).
+3. Types, labels, and label vocabulary (H3, H4).
+4. Board drift (H5) and milestones (H7).
+5. Not ready (H8).
+6. Stale (H9).
+7. **Plan the ready work** - always offered. Say how many open health findings could
+   skew the ranking.
 
-Exclude anything already `In progress` per the board or the user.
+Then ask the user which steps to work. Make no writes until they choose.
 
-### 7. Output
+**Done when:** the user has chosen one or more steps, or has said to stop.
 
-Produce a table: issue number, title, blocked-on (or "-"), ready now (yes/no).
+## Step 5. Work the chosen steps
 
-Follow with plain-language notes on:
+Read [mutations.md](mutations.md) before the first write. Then, for each chosen group:
 
-- **Chains** — "closing #51 unblocks #52, #54, and transitively #139" — preserve this
-  detail, don't compress it.
-- **Parallel-safe groups** — which ready issues touch genuinely separate areas and can
-  be assigned concurrently without merge risk, versus which look independent but touch
-  the same files (flag the merge risk even if neither blocks the other).
-- **Near-miss epics** — epics whose last open child is about to land.
-- **Inferred dependencies** — list separately with the reasoning and source for each.
-- **Stale dependency notes** — issues whose prose still says "Blocked by #N" but #N is
-  closed, or where a native `blockedBy` edge points to a closed issue.
+1. **Show the change set** as a table: issue, current value, proposed value, reason.
+2. **Get one approval for the group.** The user can drop items or stop at any point.
+3. **Confirm item by item** for actions that are public or hard to undo, even inside an
+   approved group: closing an issue, deleting a label, editing someone else's issue
+   body, and posting a comment. Show the exact comment text, because comments notify
+   people.
+4. **Check before each write.** Re-read the item's current state. Skip it if it is
+   already done or has changed since the scan.
+5. **Report** what was applied, skipped, and failed, with reasons.
+6. **Record decisions that should last.** If the user says two issues are related but
+   not duplicates, add a `relatesTo` link. Record any other deliberate exception
+   ("label `x` is kept on purpose") under "Known exceptions" in the conventions file, so
+   the next scan doesn't raise it again.
 
-Keep the write-up in plain language: short sentences, one idea per sentence, active
-voice.
+### Duplicates (H1)
 
-### 8. Offer to formalise inferred dependencies as native graph relationships
+Never close a duplicate on your own judgment.
 
-After presenting the analysis, if any inferred prose or domain dependencies were
-identified that do not already exist as native graph relationships, ask:
+1. **Report the candidate sets** with the evidence for each.
+2. **Ask the user** for each set: is it a duplicate, and which issue is kept?
+3. **Inventory unique information** on each issue being closed that the kept issue
+   lacks: background, reproduction steps, acceptance criteria, decisions in comments,
+   screenshots and links, labels, assignees, milestone, board fields, and every
+   relationship (parent, sub-issues, blocked-by, blocking, relates-to).
+4. **Carry it over.** Draft a comment on the kept issue that summarises the unique
+   information and links back to the duplicate. This keeps the original authorship. Edit
+   the kept issue's body instead only if the user prefers. Move the relationships and
+   copy missing labels. Show all of this to the user before writing.
+5. **Close each duplicate** as a duplicate of the kept issue.
+6. **Verify** that the kept issue now holds everything from the inventory in point 3.
 
-> "I found [N] dependencies that exist only as prose notes or inferences, not as native
-> GitHub relationships. Would you like me to add these as `Blocked by` graph edges? This
-> creates the relationship you can see in the issue sidebar and means the next grooming
-> session reads them directly from the graph rather than re-inferring them."
+### Not ready (H8)
 
-If the user agrees, for each inferred dependency:
+Don't invent missing context.
 
-1. Confirm the specific issues and direction (which is blocked, which is the blocker).
-2. Get the node IDs needed for the mutation:
+1. **Show what is missing** from each issue.
+2. **Ask the user first** - they often remember. If they supply the context, add it to
+   the issue body.
+3. **Otherwise**, with approval, comment to ask the author or assignee for it. Also add
+   the conventions' "needs info" label if there is one.
 
-```bash
-gh api graphql -f query='
-query { repository(owner:"OWNER", name:"REPO") {
-  blocked: issue(number: BLOCKED_N) { id }
-  blocker: issue(number: BLOCKER_N) { id }
-} }'
-```
+### Back to the menu
 
-3. Create the native graph relationship:
+After each group, return to step 4 with refreshed counts.
 
-```bash
-gh api graphql -f query='
-mutation($issueId: ID!, $blockingIssueId: ID!) {
-  addBlockedBy(input: { issueId: $issueId, blockingIssueId: $blockingIssueId }) {
-    issue { number title }
-    blockingIssue { number title }
-  }
-}' -F issueId=BLOCKED_NODE_ID -F blockingIssueId=BLOCKER_NODE_ID
-```
+**Done when:** the user stops, or every finding is resolved or recorded as an exception.
 
-4. Report what was created. Show the user each relationship before applying it and apply
-   only after explicit confirmation. Do not batch-apply without per-relationship
-   sign-off.
+## Step 6. Plan the ready work
 
-Do not add a relationship that already exists as a native graph edge — check `blockedBy`
-in step 2 first.
+Read [planning.md](planning.md) and follow it on the current data.
 
-## What this skill does not do
+## Step 7. Close the session
 
-- It does not re-prioritise, re-label, or close issues unless the user explicitly asks
-  after reviewing the grooming report.
-- It does not replace a pick-up-issue workflow — once the user selects an issue from
-  the ranked list, use a separate skill or workflow to actually implement it.
+Summarise in plain language:
+
+- **Changed** - each write, with issue links.
+- **Recorded** - exceptions and decisions saved to the conventions file.
+- **Remaining** - open findings by group, so the next session can start from them.
+- **Uncommitted** - remind the user if `.github/backlog-conventions.md` changed.
+
+## Boundaries
+
+- **Writes need approval** - every write follows a group approval in step 5.
+- **Duplicates need a person** - the user confirms each set and picks the issue to keep.
+- **No implementation** - once the user picks an issue to work on, hand over to
+  `plan-issue` or `pick-up-issue`.
+- **No commits** - leave committing the conventions file to the user.
