@@ -1,0 +1,5 @@
+#!/bin/sh
+# Re-link skills after every pull, so new or renamed skills are available
+# to Claude Code without a manual step. Never fails the merge.
+root="$(git rev-parse --show-toplevel)"
+powershell.exe -NoProfile -File "$root/scripts/link-skills.ps1" -Quiet || true

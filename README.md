@@ -83,18 +83,33 @@ Steps or reference material for the skill.
 
 For more guidance on skill design, see the `writing-great-skills` skill in this repository.
 
-### Linking the New Skill
+### Linking Skills
 
-Adding a skill directory to the repo is **not** enough on its own — Claude Code only discovers skills that have a corresponding link in `~/.claude/skills/`, and that link is not created automatically when you add a new folder here. You must create it yourself, once, for each new skill:
+Claude Code only discovers skills that have a link in `~/.claude/skills/`. The `scripts/link-skills.ps1` script creates those links for you. It makes a junction for every folder in this repo that contains a `SKILL.md`.
+
+**Once per machine**, after cloning, run:
 
 ```powershell
-cd ~/.claude/skills
-New-Item -ItemType Junction -Path <skill-name> -Target C:\Repos\agent-skills\<skill-name>
+cd C:\Repos\agent-skills
+.\scripts\link-skills.ps1 -InstallHook
 ```
 
-(From Git Bash, `ln -s /c/Repos/agent-skills/<skill-name> ~/.claude/skills/<skill-name>` works too.)
+This links every skill and installs a git `post-merge` hook (by setting `core.hooksPath` to `scripts/hooks`). After that:
 
-Without this step the skill will exist in the repo and in git history, but Claude Code won't list it or respond to it. This only needs to be done once per skill per machine — after that, edits and pulls flow through automatically (see "How It Works").
+- **Pulled skills link themselves.** The hook runs the script after every `git pull`, and Claude Code picks up the new skills automatically.
+- **Skills you add locally** need one run of `.\scripts\link-skills.ps1` (no switches), because no pull happens.
+
+What the script does with each skill:
+
+| Found in `~/.claude/skills/` | Action |
+|---|---|
+| Nothing | Creates the junction |
+| Junction to this repo | Leaves it alone |
+| Plain folder (an old copy) | Moves it to `~/.claude/skills-backup/<name>-<timestamp>`, then creates the junction |
+| Junction to somewhere else | Skips it with a warning, unless you pass `-Force` |
+| Broken junction into this repo | Removes it (for example, after a skill is renamed or deleted) |
+
+Use `-WhatIf` to preview changes without making them. The script never touches `~/.claude/skills/synced/`, which Claude Code manages for skills synced from claude.ai.
 
 ## Updating Skills
 
@@ -142,6 +157,10 @@ agent-skills/
 │   └── SKILL.md
 ├── pick-up-issue/                (auto-triggered skill)
 │   └── SKILL.md
+├── scripts/                     (tooling, not a skill)
+│   ├── link-skills.ps1          (links skills into ~/.claude/skills)
+│   └── hooks/
+│       └── post-merge           (runs link-skills.ps1 after every pull)
 ├── review-pr/                   (direct-argument skill)
 │   └── SKILL.md
 ├── terminology-modelling-panel/ (auto-triggered skill)
@@ -159,7 +178,7 @@ Currently, skills are organized flat at the repository root. As the collection g
 
 ## Tips
 
-- **Skill discovery**: Pulling a new skill directory is not enough — you must also create its junction in `~/.claude/skills/` (see "Linking the New Skill" above) before Claude Code will discover it
-- **Broken junctions**: If a junction becomes stale, you can recreate it: `Remove-Item <junction>; New-Item -ItemType Junction -Path <target> -Target <source>`
+- **Skill discovery**: Claude Code picks up a skill as soon as it is linked (see "Linking Skills" above). Restart Claude Code if one does not appear
+- **Broken junctions**: Run `.\scripts\link-skills.ps1` to repair them. Avoid `Remove-Item -Recurse` on a junction in Windows PowerShell 5.1, because it can delete the files in the target folder
 - **Version control**: Keep your skills versioned in git so you can track changes and revert if needed
 - **Documentation**: Add a `GLOSSARY.md` or other supporting files if your skill is complex — keep the main `SKILL.md` lean by disclosing reference behind pointers
