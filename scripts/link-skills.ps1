@@ -18,14 +18,15 @@
     Junctions are removed with a non-recursive delete, so their targets are never
     touched.
 
-    Run it after adding a skill. The post-merge git hook runs it after every pull.
+    The git hooks in scripts/hooks run it after every commit (post-commit) and
+    every pull (post-merge). Run it by hand to test a skill before committing it.
 
 .PARAMETER Force
     Also replace junctions that point outside this repo.
 
 .PARAMETER InstallHook
     Point this repo's git hooks at scripts/hooks, so link-skills runs after every
-    pull. Needed once per clone.
+    commit and pull. Needed once per clone.
 
 .PARAMETER Quiet
     Only print changes and warnings, not skills that are already linked.
@@ -36,7 +37,7 @@
 
 .EXAMPLE
     .\scripts\link-skills.ps1 -InstallHook
-    Links all skills and installs the post-merge hook.
+    Links all skills and installs the post-commit and post-merge hooks.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -149,7 +150,7 @@ if ($InstallHook) {
     if ($PSCmdlet.ShouldProcess($repoRoot, 'Set git core.hooksPath to scripts/hooks')) {
         git -C $repoRoot config core.hooksPath scripts/hooks
     }
-    Write-Host 'Installed git hooks: link-skills now runs after every pull.' -ForegroundColor Green
+    Write-Host 'Installed git hooks: link-skills now runs after every commit and pull.' -ForegroundColor Green
 }
 
 Write-Host ('Done: {0} new, {1} replaced, {2} already linked, {3} skipped, {4} removed.' -f `

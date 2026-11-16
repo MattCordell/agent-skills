@@ -94,10 +94,12 @@ cd C:\Repos\agent-skills
 .\scripts\link-skills.ps1 -InstallHook
 ```
 
-This links every skill and installs a git `post-merge` hook (by setting `core.hooksPath` to `scripts/hooks`). After that:
+This links every skill and installs the git hooks in `scripts/hooks` (by setting `core.hooksPath`). After that, new skills link themselves, and Claude Code picks them up automatically:
 
-- **Pulled skills link themselves.** The hook runs the script after every `git pull`, and Claude Code picks up the new skills automatically.
-- **Skills you add locally** need one run of `.\scripts\link-skills.ps1` (no switches), because no pull happens.
+- **Skills you add locally** are linked by the `post-commit` hook when you commit them.
+- **Pulled skills** are linked by the `post-merge` hook after every `git pull`.
+
+To test a new skill before committing it, run `.\scripts\link-skills.ps1` (no switches).
 
 What the script does with each skill:
 
@@ -128,6 +130,8 @@ Use `-WhatIf` to preview changes without making them. The script never touches `
    git commit -m "feat(skill-name): description of change"
    git push origin main
    ```
+
+   A new skill links itself when you commit it, because the `post-commit` hook runs the link script. Other machines link it when they pull.
 
 4. **Pull updates** when working across machines:
    ```powershell
@@ -160,6 +164,7 @@ agent-skills/
 ├── scripts/                     (tooling, not a skill)
 │   ├── link-skills.ps1          (links skills into ~/.claude/skills)
 │   └── hooks/
+│       ├── post-commit          (runs link-skills.ps1 after every commit)
 │       └── post-merge           (runs link-skills.ps1 after every pull)
 ├── review-pr/                   (direct-argument skill)
 │   └── SKILL.md

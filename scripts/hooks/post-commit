@@ -1,0 +1,5 @@
+#!/bin/sh
+# Re-link skills after every local commit, so a new skill is available to
+# Claude Code as soon as it is committed. Never fails the commit.
+root="$(git rev-parse --show-toplevel)"
+powershell.exe -NoProfile -File "$root/scripts/link-skills.ps1" -Quiet || true
