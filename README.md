@@ -6,6 +6,7 @@ A curated collection of skills for Claude Code (CLI and VS Code extension). This
 
 | Skill | Purpose |
 |-------|---------|
+| **backlog-grooming** | Groom a GitHub Issues backlog in any repo. Learns the repo's issue conventions and saves them to `.github/backlog-conventions.md`, scans backlog health (duplicates, missing links, wrong issue types or labels, board drift, thin or stale issues), applies fixes in user-approved groups, and ranks the ready work. |
 | **cleanup** | Tidy up a local git repository after finishing a task, ready for a new one. Deletes local branches already merged into trunk, prunes stale remote-tracking refs, and switches back to trunk with the latest pull. |
 | **commit** | Review changes with `git status` and `git diff`, stage files, write conventional commit messages with explanatory body, and push to origin. Reports the commit SHA after pushing. |
 | **conference-submission-review** | Conduct structured peer reviews of academic conference or journal submissions in health informatics, biomedical informatics, and related fields. Also supports self-checking your own paper before submitting. |
@@ -124,6 +125,12 @@ Without this step the skill will exist in the repo and in git history, but Claud
 agent-skills/
 ├── README.md                    (this file)
 ├── LICENSE
+├── backlog-grooming/            (auto-triggered skill)
+│   ├── SKILL.md
+│   ├── conventions-template.md
+│   ├── mutations.md
+│   ├── planning.md
+│   └── queries.md
 ├── cleanup/                     (user-invoked skill)
 │   └── SKILL.md
 ├── commit/                      (user-invoked skill)
