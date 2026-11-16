@@ -13,6 +13,7 @@ A curated collection of skills for Claude Code (CLI and VS Code extension). This
 | **plan-issue** | Research a GitHub issue and post a detailed implementation plan as an issue comment, under Claude Code's plan mode. Invoked with `/plan-issue <issue URL or #N>`. Writes no code. |
 | **pick-up-issue** | Execute a GitHub issue that already has a plan comment from `plan-issue`: branch, open a draft PR, implement in phases, verify, and mark ready for review. Stops and asks if no plan is found. Invoked with `/pick-up-issue <issue URL or #N>`. Never merges. |
 | **review-pr** | Review GitHub pull requests and post feedback as a PR comment. Analyzes diffs for correctness, security, error handling, tests, readability, and performance. Invoked with `/review-pr <PR URL>`. |
+| **terminology-modelling-panel** | Stress-test a clinical terminology modelling question (for example SNOMED CT) through several expert lenses: a terminologist, clinical specialists, implementation, and a rationale-checking devil's advocate. Grounds claims in Ontoserver, the editorial guide, and authoritative clinical sources, then synthesises a defensible position with its trade-offs. |
 | **to-tickets** | Break a plan, spec, or conversation into tracer-bullet tickets with blocking relationships. Publishes to your configured issue tracker with dependencies declared. |
 | **verify-fixes** | Re-verify that PR review findings were addressed at the current head, scan the diff for newly introduced issues, run local gates, and post a merge-readiness comment. Invoked with `/verify-fixes <PR URL or number>`. |
 | **writing-great-skills** | Reference for writing and editing skills well — principles for predictability, information hierarchy, failure modes, and structural patterns that make skills reliable and maintainable. |
@@ -142,6 +143,8 @@ agent-skills/
 ├── pick-up-issue/                (auto-triggered skill)
 │   └── SKILL.md
 ├── review-pr/                   (direct-argument skill)
+│   └── SKILL.md
+├── terminology-modelling-panel/ (auto-triggered skill)
 │   └── SKILL.md
 ├── to-tickets/                  (user-invoked skill)
 │   └── SKILL.md
